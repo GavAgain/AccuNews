@@ -17,7 +17,6 @@ from urllib.parse import urlparse
 import feedparser
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -25,7 +24,9 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("accunews")
 DB_URL = os.getenv("DATABASE_URL", "sqlite:///./accunews.db")
 if DB_URL.startswith("postgres://"):
-    DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
+    DB_URL = DB_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DB_URL.startswith("postgresql://"):
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
 
 SOURCES = [
@@ -81,7 +82,7 @@ def article_date(entry) -> datetime:
 
 async def ingest_once() -> dict:
     result = {"feeds": 0, "articles": 0, "errors": []}
-    headers = {"User-Agent": "AccuNews/0.1 (+https://github.com/; RSS reader; contact: admin@accunews.example)"}
+    headers = {"User-Agent": "AccuNews/0.1 (+https://github.com/GavAgain/AccuNews; RSS reader)"}
     timeout = httpx.Timeout(18.0, connect=8.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=headers) as client:
         for source in SOURCES:
@@ -172,7 +173,6 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError: pass
 
 app=FastAPI(title="AccuNews API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/api/health")
 def health():
