@@ -1,0 +1,42 @@
+name: Collect news and publish AccuNews
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install collection dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Collect RSS feeds and build site
+        run: python -m backend.static_export
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Publish site
+        id: deployment
+        uses: actions/deploy-pages@v4
