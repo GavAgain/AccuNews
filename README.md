@@ -1,22 +1,30 @@
 # AccuNews
 
-**Information belongs to everyone.** AccuNews is a free-first, multi-publisher news reader built with HTML, CSS, JavaScript, FastAPI and SQLModel.
+**Information belongs to everyone.** A multi-publisher news reader with transparent sourcing and a free GitHub Pages deployment.
 
-## What works
+## GitHub Pages version
 
-- Fourteen RSS and Atom feeds across international, regional, business, technology and science coverage.
-- Polling at startup and every 15 minutes; article-link deduplication and persistent SQLite storage by default.
-- A responsive homepage with search, topic filters, live publisher health and original source links.
-- Conservative, explainable headline-and-time clustering. Each story exposes publisher headlines, dates, regions and feed descriptions.
-- Docker packaging and a Render deployment blueprint.
+The public website is static HTML, CSS, JavaScript and publisher-attributed JSON. GitHub Actions fetches RSS/Atom feeds, groups similar headlines, and publishes a fresh site snapshot about every 15 minutes. GitHub Pages serves the site at `https://gavagain.github.io/AccuNews/` once Pages is enabled for the repository.
+
+The scheduled publisher collection is implemented in `backend/static_export.py`; `.github/workflows/pages.yml` builds and publishes the site without a separate hosting account or API keys. The workflow requests only the GitHub Pages deployment permissions (`pages: write`, `id-token: write`) and repository read access.
+
+## Features
+
+- Fourteen public RSS and Atom feeds spanning world news, business, technology, science and analysis.
+- Headline search and category filters.
+- Article-link deduplication and conservative headline-and-time story grouping.
+- Story detail pages with publisher headlines, dates, regions, links and short feed descriptions.
+- Live publisher status and a responsive mobile layout.
 
 ## Transparency and limits
 
-AccuNews does not fetch or republish full publisher articles. It stores the title, URL, publication time, publisher metadata and short descriptions supplied in public feeds. The service uses RSS only; a source can change access or terms at any time, and feed failures appear in Publisher feed status. Review each publisher's feed terms before public/commercial operation.
+AccuNews stores publisher metadata, titles, links, publication times and short descriptions supplied in feeds. It does not reproduce full articles. Feed access and reuse terms can change; the site shows the last collection's availability for each publisher.
 
-Story clusters are a deterministic headline-overlap heuristic. Similar titles can describe different events, while reports about the same event can use very different words. Open a cluster and inspect the original sources. Current summaries are attribution-oriented feed summaries, not AI-generated analysis. Claim extraction, fact checking, bias scoring and independent verification are not implemented. No claim is presented as independently verified.
+Story clusters are a deterministic headline-overlap heuristic. Similar headlines can describe separate events and reports on the same event can use different wording. The clusters help with discovery; they do not confirm a shared event or prove factual agreement. Summaries are attribution-oriented and use publisher-provided headlines/descriptions. AI claim extraction, evidence comparison, fact-checking and independent verification are not implemented.
 
-## Run locally
+The GitHub Pages site is public. GitHub Free Pages requires a public repository, so publishing this project there makes its source code public as well. Do not store secrets, API keys or private data in the repository. Collection is periodic, not minute-by-minute live; scheduled runs can be delayed by GitHub.
+
+## Local development
 
 ```powershell
 cd backend
@@ -26,21 +34,17 @@ pip install -r requirements.txt
 uvicorn app:app --reload
 ```
 
-Open `http://127.0.0.1:8000`. On the first run, RSS collection starts in the background and may take a minute. Set `DATABASE_URL` to a PostgreSQL connection string for a multi-instance deployment; SQLite is suitable only for a single instance with persistent disk. `REFRESH_SECONDS` defaults to 900. Set a truthful contact address in the `User-Agent` before operating a public service.
+The FastAPI service can run the API and collect feeds locally. Its SQLite database is for single-instance local use; the Pages publication uses a scheduled static snapshot rather than a continuously running API server.
 
-## Deploy
+## API (local FastAPI mode)
 
-The repository includes `render.yaml` and a `Dockerfile`. Create a Render web service from this repository, attach a persistent disk at `/data`, and deploy the blueprint. Render account access is required. For a growing service, provision managed PostgreSQL and set `DATABASE_URL`; configure backups, monitoring, and a contact address. No AI key is needed for the current deterministic version. Never put secrets in frontend files.
-
-## API
-
-- `GET /api/health` — service and collection status
-- `GET /api/feeds` — configured sources and feed status
-- `GET /api/stories?q=&category=&limit=` — grouped story feed
+- `GET /api/health` — collection status
+- `GET /api/feeds` — configured sources and latest feed status
+- `GET /api/stories?q=&category=&limit=` — grouped stories
 - `GET /api/stories/{id}` — cluster detail
-- `POST /api/refresh` — request an on-demand collection
-- `GET /docs` — FastAPI OpenAPI interface
+- `POST /api/refresh` — request a local refresh
+- `GET /docs` — FastAPI API documentation
 
-## Data sources
+## Publisher feeds
 
-The initial source list is defined in `backend/app.py`. Feeds are public RSS/Atom endpoints; availability and reuse terms are publisher-controlled. Add only feeds whose current publisher terms permit the intended use.
+The feed list is in `backend/app.py`. Feeds use public RSS/Atom endpoints; publishers control availability and terms. Review each publisher's current terms before public or commercial operation.
