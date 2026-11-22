@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: accunews
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: accunews-data
+      mountPath: /data
+      sizeGB: 1
