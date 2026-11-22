@@ -121,15 +121,21 @@ STOP = set("about after again against all also among another any are because bee
 def tokens(title: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]{3,}", title.lower()) if w not in STOP}
 
+def as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
 def group_articles(articles: list[Article]) -> list[dict]:
     # Title overlap is a conservative, deterministic clustering heuristic. It never infers factual agreement.
+    # Ignore stale RSS back-catalog items so the front page remains a current news briefing.
+    cutoff = datetime.now(timezone.utc).timestamp() - 14 * 24 * 60 * 60
+    articles = [a for a in articles if as_utc(a.published).timestamp() >= cutoff]
     groups: list[list[Article]] = []
     for article in articles:
         words = tokens(article.title)
         match = None
         for group in groups:
             lead = group[0]
-            age = abs((article.published - lead.published).total_seconds())
+            age = abs((as_utc(article.published) - as_utc(lead.published)).total_seconds())
             other = tokens(lead.title)
             overlap = len(words & other) / max(1, len(words | other))
             if age < 60 * 60 * 36 and (overlap >= 0.24 or SequenceMatcher(None, article.title.lower(), lead.title.lower()).ratio() >= 0.55):
@@ -141,23 +147,26 @@ def group_articles(articles: list[Article]) -> list[dict]:
             match.append(article)
     out=[]
     for group in groups:
-        group.sort(key=lambda a:a.published, reverse=True)
+        group.sort(key=lambda a:as_utc(a.published), reverse=True)
         ids=sorted(a.id for a in group)
-        out.append({"id": hashlib.sha1("".join(ids).encode()).hexdigest()[:16], "title": group[0].title, "updated": max(a.published for a in group).isoformat(), "sources_count": len({a.publisher for a in group}), "articles": [article_json(a) for a in group], "summary": consolidated(group), "category": group[0].category, "publishers": list(dict.fromkeys(a.publisher for a in group))})
+        out.append({"id": hashlib.sha1("".join(ids).encode()).hexdigest()[:16], "title": group[0].title, "updated": max(as_utc(a.published) for a in group).isoformat(), "sources_count": len({a.publisher for a in group}), "articles": [article_json(a) for a in group], "summary": consolidated(group), "category": group[0].category, "publishers": list(dict.fromkeys(a.publisher for a in group))})
     out.sort(key=lambda g: g["updated"], reverse=True)
     return out
 
 def article_json(a: Article) -> dict:
-    return {"id":a.id,"title":a.title,"publisher":a.publisher,"region":a.region,"category":a.category,"url":a.url,"summary":a.summary,"published":a.published.isoformat(),"source_name":a.source_name}
+    return {"id":a.id,"title":a.title,"publisher":a.publisher,"region":a.region,"category":a.category,"url":a.url,"summary":a.summary,"published":as_utc(a.published).isoformat(),"source_name":a.source_name}
 
 def consolidated(group: list[Article]) -> str:
+    publishers = {a.publisher for a in group}
     if len(group) == 1:
         return "One publisher is currently reporting this. Open the source for its account; independent corroboration has not yet appeared in this collection."
+    if len(publishers) == 1:
+        return f"Only {next(iter(publishers))} appears in this cluster. Similar headlines from the same publisher are grouped for navigation; they are not independent corroboration."
     # Grounded summary is deliberately limited to the shared title vocabulary and feed descriptions.
     descriptions=[a.summary for a in group if a.summary]
     if descriptions:
-        return "Across " + str(len({a.publisher for a in group})) + " publishers, coverage centers on “" + group[0].title + ".” Publisher descriptions vary; read the linked reports to compare their details and framing."
-    return f"{len({a.publisher for a in group})} publishers have headlines grouped by similar wording. This is an automated match, not confirmation that every reported detail agrees."
+        return "Across " + str(len(publishers)) + " publishers, coverage centers on “" + group[0].title + ".” Publisher descriptions vary; read the linked reports to compare their details and framing."
+    return f"{len(publishers)} publishers have headlines grouped by similar wording. This is an automated match, not confirmation that every reported detail agrees."
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
